@@ -4,10 +4,13 @@ import {
   handleGetMediaById,
   handleConfirmUpload,
   handleDeleteMedia,
-  handleDownloadMedia
+  handleDownloadMedia,
+  handleGetUploadSignature,
+  handleDirectUpload
 } from '../controllers/mediaController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody, validateQuery, validateParams } from '../middleware/validate.js';
+import { uploadSingle } from '../middleware/upload.js';
 import {
   listMediaQuerySchema,
   confirmUploadSchema,
@@ -20,6 +23,8 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', validateQuery(listMediaQuerySchema), handleListMedia);
+router.post('/upload-signature', handleGetUploadSignature);
+router.post('/direct-upload', uploadSingle('file'), handleDirectUpload);
 router.post('/confirm-upload', validateBody(confirmUploadSchema), handleConfirmUpload);
 router.get('/:id', validateParams(mediaIdParamSchema), handleGetMediaById);
 router.delete('/:id', validateParams(mediaIdParamSchema), handleDeleteMedia);

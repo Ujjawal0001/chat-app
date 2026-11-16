@@ -5,7 +5,70 @@ import {
   deleteMedia,
   getMediaDownloadUrl
 } from '../services/mediaService.js';
+import {
+  generateSignedUploadParameters,
+  uploadBufferToCloudinary
+} from '../services/uploadService.js';
+import { validateFileMetadata } from '../utils/fileValidation.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { config } from '../config/env.js';
+
+/**
+ * Generates server-side signed parameters for direct browser-to-Cloudinary upload.
+ * POST /api/media/upload-signature
+ */
+export const handleGetUploadSignature = async (req, res, next) => {
+  try {
+    const { mediaType } = req.body || {};
+    const signatureData = generateSignedUploadParameters({
+      userId: req.user.id,
+      sharedSpaceId: req.sharedSpaceId,
+      mediaType: mediaType || 'auto'
+    });
+
+    return sendSuccess(res, signatureData, 'Upload signature generated successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Fallback server-side upload endpoint using Multer streaming directly to Cloudinary.
+ * POST /api/media/direct-upload
+ */
+export const handleDirectUpload = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return sendError(res, 'No media file provided for upload.', 400);
+    }
+
+    // Validate file
+    const validation = validateFileMetadata(req.file.mimetype, req.file.size, req.file.originalname);
+    if (!validation.isValid) {
+      return sendError(res, validation.error, 400);
+    }
+
+    const folder = `${config.cloudinary.folder}/${req.sharedSpaceId}`;
+    const uploadResult = await uploadBufferToCloudinary(req.file.buffer, {
+      folder,
+      resourceType: validation.mediaType === 'video' ? 'video' : 'image',
+      originalname: req.file.originalname
+    });
+
+    // Create record in PostgreSQL
+    const item = await createMediaRecord({
+      sharedSpaceId: req.sharedSpaceId,
+      uploadedById: req.user.id,
+      title: req.body.title || req.file.originalname.replace(/\.[^/.]+$/, ''),
+      description: req.body.description || null,
+      ...uploadResult
+    });
+
+    return sendSuccess(res, { media: item }, 'Media uploaded successfully', 201);
+  } catch (err) {
+    next(err);
+  }
+};
 
 export const handleListMedia = async (req, res, next) => {
   try {

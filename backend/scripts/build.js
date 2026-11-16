@@ -10,7 +10,11 @@ const backendDir = path.resolve(__dirname, '..');
 
 console.log('[Build] Starting full-stack production build on Render...');
 
-// 1. Build frontend if it exists
+// 1. Ensure backend dependencies (including Prisma CLI) are installed
+console.log('[Build] Installing backend dependencies in:', backendDir);
+execSync('npm install --include=dev', { cwd: backendDir, stdio: 'inherit' });
+
+// 2. Build frontend if it exists
 if (fs.existsSync(frontendDir)) {
   console.log('[Build] Building frontend in:', frontendDir);
   execSync('npm install', { cwd: frontendDir, stdio: 'inherit' });
@@ -18,13 +22,8 @@ if (fs.existsSync(frontendDir)) {
   console.log('[Build] Frontend build complete!');
 }
 
-// 2. Generate Prisma Client using project-pinned local Prisma (avoiding unpinned npx)
+// 3. Generate Prisma Client using local npm script
 console.log('[Build] Generating Prisma Client in:', backendDir);
-try {
-  execSync('node ./node_modules/prisma/build/index.js generate', { cwd: backendDir, stdio: 'inherit' });
-} catch (err) {
-  console.log('[Build] Falling back to npm run prisma:generate...');
-  execSync('npm run prisma:generate', { cwd: backendDir, stdio: 'inherit' });
-}
+execSync('npm run prisma:generate', { cwd: backendDir, stdio: 'inherit' });
 
 console.log('[Build] Full-stack build completed successfully!');

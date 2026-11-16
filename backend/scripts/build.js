@@ -26,4 +26,15 @@ if (fs.existsSync(frontendDir)) {
 console.log('[Build] Generating Prisma Client in:', backendDir);
 execSync('npm run prisma:generate', { cwd: backendDir, stdio: 'inherit' });
 
+// 4. Safely apply Prisma migrations in production if DATABASE_URL is configured
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1')) {
+  console.log('[Build] Production database detected. Applying database migrations...');
+  try {
+    execSync('npx prisma migrate deploy', { cwd: backendDir, stdio: 'inherit' });
+    console.log('[Build] Migrations deployed successfully!');
+  } catch (migErr) {
+    console.warn('[Build Warning] Migration execution notice:', migErr.message);
+  }
+}
+
 console.log('[Build] Full-stack build completed successfully!');

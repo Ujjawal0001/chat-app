@@ -1,0 +1,90 @@
+// TogetherSpace Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model SharedSpace {
+  id        String   @id @default(uuid())
+  name      String   @default("Our Shared Space")
+  createdAt DateTime @default(now())
+
+  users User[]
+  media Media[]
+
+  @@map("shared_spaces")
+}
+
+model User {
+  id            String      @id @default(uuid())
+  name          String
+  email         String      @unique
+  password      String
+  sharedSpaceId String
+  sharedSpace   SharedSpace @relation(fields: [sharedSpaceId], references: [id], onDelete: Cascade)
+
+  uploadedMedia Media[]    @relation("UserUploads")
+  favorites     Favorite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sharedSpaceId])
+  @@map("users")
+}
+
+model Media {
+  id            String      @id @default(uuid())
+  title         String?
+  description   String?
+  mediaUrl      String
+  thumbnailUrl  String?
+  publicId      String      @unique
+  mediaType     String      // 'image' | 'video'
+  mimeType      String
+  fileSize      Int
+  uploadedById  String
+  uploadedBy    User        @relation("UserUploads", fields: [uploadedById], references: [id], onDelete: Cascade)
+  sharedSpaceId String
+  sharedSpace   SharedSpace @relation(fields: [sharedSpaceId], references: [id], onDelete: Cascade)
+
+  favorites Favorite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uploadedById])
+  @@index([sharedSpaceId])
+  @@index([createdAt])
+  @@map("media")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, mediaId])
+  @@index([userId])
+  @@index([mediaId])
+  @@map("favorites")
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("invitations")
+}

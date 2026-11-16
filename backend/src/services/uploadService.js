@@ -1,5 +1,13 @@
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import cloudinary, { isCloudinaryConfigured } from '../config/cloudinary.js';
 import { config } from '../config/env.js';
+
+const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 /**
  * Generates server-side signed Cloudinary upload parameters for direct client uploads.
@@ -36,8 +44,29 @@ export const generateSignedUploadParameters = ({ userId, sharedSpaceId, mediaTyp
 };
 
 /**
+ * Saves a file buffer locally to the server's uploads directory.
+ * Used as reliable fallback when Cloudinary is not configured or in local development.
+ */
+export const saveBufferLocally = async (fileBuffer, { originalname, resourceType = 'image' }) => {
+  const ext = originalname ? path.extname(originalname).toLowerCase() : (resourceType === 'video' ? '.mp4' : '.jpg');
+  const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
+  const filePath = path.join(UPLOADS_DIR, filename);
+
+  await fs.promises.writeFile(filePath, fileBuffer);
+
+  const mediaUrl = `/uploads/${filename}`;
+  return {
+    mediaUrl,
+    thumbnailUrl: resourceType === 'video' ? null : mediaUrl,
+    publicId: `local_${filename}`,
+    mediaType: resourceType === 'video' ? 'video' : 'image',
+    mimeType: resourceType === 'video' ? 'video/mp4' : 'image/jpeg',
+    fileSize: fileBuffer.length
+  };
+};
+
+/**
  * Uploads a file buffer directly to Cloudinary using streaming.
- * Generates video poster thumbnails automatically where supported.
  */
 export const uploadBufferToCloudinary = (fileBuffer, { folder, resourceType = 'auto', originalname }) => {
   return new Promise((resolve, reject) => {
@@ -56,7 +85,6 @@ export const uploadBufferToCloudinary = (fileBuffer, { folder, resourceType = 'a
 
         let thumbnailUrl = null;
         if (result.resource_type === 'video') {
-          // Cloudinary generates video poster thumbnails by transforming or replacing the extension
           thumbnailUrl = cloudinary.url(result.public_id, {
             resource_type: 'video',
             format: 'jpg',
@@ -80,10 +108,41 @@ export const uploadBufferToCloudinary = (fileBuffer, { folder, resourceType = 'a
 };
 
 /**
- * Removes an asset from Cloudinary by its public ID.
+ * Unified buffer uploader: Tries Cloudinary first if configured; falls back to local storage seamlessly.
+ */
+export const uploadBuffer = async (fileBuffer, { folder, resourceType = 'auto', originalname }) => {
+  if (isCloudinaryConfigured()) {
+    try {
+      return await uploadBufferToCloudinary(fileBuffer, { folder, resourceType, originalname });
+    } catch (cloudErr) {
+      console.warn('[Upload Notice] Cloudinary upload notice, utilizing local storage fallback:', cloudErr.message);
+    }
+  }
+
+  // Reliable local storage fallback (requires 0 external setup)
+  return await saveBufferLocally(fileBuffer, { originalname, resourceType });
+};
+
+/**
+ * Removes an asset from Cloudinary or local storage by its public ID.
  */
 export const removeCloudinaryAsset = async (publicId, resourceType = 'image') => {
-  if (!isCloudinaryConfigured() || !publicId) {
+  if (!publicId) return false;
+
+  if (publicId.startsWith('local_')) {
+    const filename = publicId.replace('local_', '');
+    const filePath = path.join(UPLOADS_DIR, filename);
+    try {
+      if (fs.existsSync(filePath)) {
+        await fs.promises.unlink(filePath);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (!isCloudinaryConfigured()) {
     return false;
   }
 

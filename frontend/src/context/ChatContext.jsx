@@ -13,17 +13,25 @@ export const ChatProvider = ({ children }) => {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
 
-  // Fetch initial messages history
-  const fetchMessages = useCallback(async () => {
+  // Fetch initial messages history and initial partner online status
+  const fetchMessagesAndStatus = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
-      const res = await api.get('/messages');
-      if (res.success && Array.isArray(res.data)) {
-        setMessages(res.data);
+      const [messagesRes, statusRes] = await Promise.allSettled([
+        api.get('/messages'),
+        api.get('/messages/status')
+      ]);
+
+      if (messagesRes.status === 'fulfilled' && messagesRes.value?.success && Array.isArray(messagesRes.value.data)) {
+        setMessages(messagesRes.value.data);
+      }
+
+      if (statusRes.status === 'fulfilled' && statusRes.value?.success && typeof statusRes.value.data?.isPartnerOnline === 'boolean') {
+        setIsPartnerOnline(statusRes.value.data.isPartnerOnline);
       }
     } catch (err) {
-      console.error('Failed to load chat messages:', err);
+      console.error('Failed to load chat data:', err);
     } finally {
       setLoading(false);
     }
@@ -52,17 +60,32 @@ export const ChatProvider = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
-    fetchMessages();
+    fetchMessagesAndStatus();
 
     const socket = getSocket();
     if (!socket.connected) {
       socket.connect();
     }
 
+    // Handler for room_status (sent immediately upon connect/reconnect)
+    const handleRoomStatus = (data) => {
+      if (typeof data?.isPartnerOnline === 'boolean') {
+        setIsPartnerOnline(data.isPartnerOnline);
+      }
+    };
+
+    // Handler for incoming new message
     const handleNewMessage = (newMsg) => {
       setMessages((prev) => {
-        // Prevent duplicate appending
+        // 1. If permanent ID already exists in the list, ignore duplicate
         if (prev.some((m) => m.id === newMsg.id)) return prev;
+
+        // 2. If clientTempId matches an existing optimistic message, replace it in place
+        if (newMsg.clientTempId && prev.some((m) => m.id === newMsg.clientTempId)) {
+          return prev.map((m) => (m.id === newMsg.clientTempId ? newMsg : m));
+        }
+
+        // 3. Otherwise append new message
         return [...prev, newMsg];
       });
 
@@ -84,22 +107,36 @@ export const ChatProvider = ({ children }) => {
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
     };
 
-    const handleUserOnline = () => setIsPartnerOnline(true);
-    const handleUserOffline = () => setIsPartnerOnline(false);
+    const handleUserOnline = (data) => {
+      if (data?.userId !== user.id) {
+        setIsPartnerOnline(true);
+      }
+    };
 
-    const handleUserTyping = () => {
-      setPartnerTyping(true);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => {
+    const handleUserOffline = (data) => {
+      if (data?.userId !== user.id) {
+        setIsPartnerOnline(false);
+      }
+    };
+
+    const handleUserTyping = (data) => {
+      if (data?.userId !== user.id) {
+        setPartnerTyping(true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          setPartnerTyping(false);
+        }, 3000);
+      }
+    };
+
+    const handleUserStopTyping = (data) => {
+      if (data?.userId !== user.id) {
         setPartnerTyping(false);
-      }, 3000);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      }
     };
 
-    const handleUserStopTyping = () => {
-      setPartnerTyping(false);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    };
-
+    socket.on('room_status', handleRoomStatus);
     socket.on('new_message', handleNewMessage);
     socket.on('messages_read', handleMessagesRead);
     socket.on('message_deleted', handleMessageDeleted);
@@ -108,7 +145,16 @@ export const ChatProvider = ({ children }) => {
     socket.on('user_typing', handleUserTyping);
     socket.on('user_stop_typing', handleUserStopTyping);
 
+    // Re-check presence periodically
+    const presenceInterval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('check_online');
+      }
+    }, 15000);
+
     return () => {
+      clearInterval(presenceInterval);
+      socket.off('room_status', handleRoomStatus);
       socket.off('new_message', handleNewMessage);
       socket.off('messages_read', handleMessagesRead);
       socket.off('message_deleted', handleMessageDeleted);
@@ -118,16 +164,14 @@ export const ChatProvider = ({ children }) => {
       socket.off('user_stop_typing', handleUserStopTyping);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [isAuthenticated, user, fetchMessages]);
+  }, [isAuthenticated, user, fetchMessagesAndStatus]);
 
-  // Send message handler (Supports both WebSocket and REST fallback)
+  // Send message handler with rock-solid deduplication
   const sendMessage = async ({ content, mediaUrl, mediaType }) => {
-    const socket = getSocket();
-
-    // Optimistic message placeholder
-    const tempId = 'temp-' + Date.now();
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const optimisticMsg = {
       id: tempId,
+      clientTempId: tempId,
       content,
       mediaUrl,
       mediaType,
@@ -142,20 +186,31 @@ export const ChatProvider = ({ children }) => {
       }
     };
 
+    // Optimistically insert message
     setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
-      // Send via REST for rock-solid persistence
-      const res = await api.post('/messages', { content, mediaUrl, mediaType });
+      const res = await api.post('/messages', {
+        content,
+        mediaUrl,
+        mediaType,
+        clientTempId: tempId
+      });
+
       if (res.success && res.data) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? res.data : m))
-        );
+        setMessages((prev) => {
+          // If socket already added this permanent message, simply filter out the optimistic tempId
+          if (prev.some((m) => m.id === res.data.id)) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          // Otherwise update optimistic item to real item
+          return prev.map((m) => (m.id === tempId ? res.data : m));
+        });
         return res.data;
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      // Remove optimistic message if failed
+      // Remove optimistic message if submission failed
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
     }
@@ -197,7 +252,7 @@ export const ChatProvider = ({ children }) => {
         deleteMessage: deleteMsg,
         sendTypingStatus,
         markAsRead,
-        refreshMessages: fetchMessages
+        refreshMessages: fetchMessagesAndStatus
       }}
     >
       {children}

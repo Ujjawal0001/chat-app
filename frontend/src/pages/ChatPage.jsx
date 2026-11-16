@@ -107,8 +107,8 @@ export const ChatPage = () => {
       if (attachedFile) {
         setUploadingMedia(true);
         const uploaded = await uploadAttachment(attachedFile);
-        mediaUrl = uploaded.mediaUrl;
-        mediaType = uploaded.mediaType;
+        mediaUrl = uploaded?.mediaUrl || uploaded?.media?.mediaUrl;
+        mediaType = uploaded?.mediaType || uploaded?.media?.mediaType;
       }
 
       await sendMessage({ content, mediaUrl, mediaType });

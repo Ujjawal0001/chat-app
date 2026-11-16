@@ -17,7 +17,10 @@ export const isCloudinaryConfigured = () => {
     config.cloudinary.cloudName &&
     config.cloudinary.apiKey &&
     config.cloudinary.apiSecret &&
-    config.cloudinary.apiKey !== '123456789012345'
+    config.cloudinary.cloudName.trim() !== '' &&
+    config.cloudinary.cloudName !== 'demo' &&
+    config.cloudinary.apiKey !== '123456789012345' &&
+    config.cloudinary.apiSecret !== 'abcdefghijklmnopqrstuvwxyz123'
   );
 };
 

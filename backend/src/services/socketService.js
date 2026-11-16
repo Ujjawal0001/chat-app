@@ -5,6 +5,21 @@ import { createMessage, markMessagesAsRead } from './messageService.js';
 
 let io = null;
 
+// Registry of active users in each space: sharedSpaceId -> Set of userIds
+const spaceActiveUsers = new Map();
+
+/**
+ * Checks if the partner in the space has an active socket connection.
+ */
+export const isPartnerOnlineInSpace = (sharedSpaceId, currentUserId) => {
+  const activeSet = spaceActiveUsers.get(sharedSpaceId);
+  if (!activeSet) return false;
+  for (const uid of activeSet) {
+    if (uid !== currentUserId) return true;
+  }
+  return false;
+};
+
 export const initSocketServer = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
@@ -17,10 +32,8 @@ export const initSocketServer = (httpServer) => {
   // Socket Authentication Middleware
   io.use(async (socket, next) => {
     try {
-      // 1. Try extracting token from handshake auth or headers
       let token = socket.handshake.auth?.token;
 
-      // 2. Fallback to cookie parser in handshake headers
       if (!token && socket.handshake.headers?.cookie) {
         const cookies = socket.handshake.headers.cookie.split(';').reduce((res, c) => {
           const [key, val] = c.trim().split('=');
@@ -59,19 +72,37 @@ export const initSocketServer = (httpServer) => {
     const user = socket.user;
     const room = `space:${user.sharedSpaceId}`;
 
-    // Join space room
     socket.join(room);
 
-    // Notify partner that user is online
+    // Track user presence in space
+    if (!spaceActiveUsers.has(user.sharedSpaceId)) {
+      spaceActiveUsers.set(user.sharedSpaceId, new Set());
+    }
+    const spaceSet = spaceActiveUsers.get(user.sharedSpaceId);
+    spaceSet.add(user.id);
+
+    // Check if partner is already online in this space
+    const partnerIsOnline = Array.from(spaceSet).some((id) => id !== user.id);
+
+    // Send immediate room status to newly connected client
+    socket.emit('room_status', { isPartnerOnline: partnerIsOnline });
+
+    // Notify partner that this user is online
     socket.to(room).emit('user_online', {
       userId: user.id,
       name: user.name
     });
 
+    // Query online status on request
+    socket.on('check_online', () => {
+      const isOnline = isPartnerOnlineInSpace(user.sharedSpaceId, user.id);
+      socket.emit('room_status', { isPartnerOnline: isOnline });
+    });
+
     // Handle incoming chat message over socket
     socket.on('send_message', async (data, ack) => {
       try {
-        const { content, mediaUrl, mediaType } = data;
+        const { content, mediaUrl, mediaType, clientTempId } = data;
         const message = await createMessage({
           senderId: user.id,
           sharedSpaceId: user.sharedSpaceId,
@@ -80,11 +111,15 @@ export const initSocketServer = (httpServer) => {
           mediaType
         });
 
-        // Broadcast to space room
-        io.to(room).emit('new_message', message);
+        const payload = {
+          ...message,
+          clientTempId: clientTempId || null
+        };
+
+        io.to(room).emit('new_message', payload);
 
         if (typeof ack === 'function') {
-          ack({ success: true, message });
+          ack({ success: true, message: payload });
         }
       } catch (err) {
         if (typeof ack === 'function') {
@@ -120,10 +155,23 @@ export const initSocketServer = (httpServer) => {
       } catch (err) {}
     });
 
-    socket.on('disconnect', () => {
-      socket.to(room).emit('user_offline', {
-        userId: user.id
-      });
+    socket.on('disconnect', async () => {
+      // Check if user has any remaining active sockets in this room
+      const roomSockets = await io.in(room).fetchSockets();
+      const userStillConnected = roomSockets.some((s) => s.user?.id === user.id);
+
+      if (!userStillConnected) {
+        const currentSet = spaceActiveUsers.get(user.sharedSpaceId);
+        if (currentSet) {
+          currentSet.delete(user.id);
+          if (currentSet.size === 0) {
+            spaceActiveUsers.delete(user.sharedSpaceId);
+          }
+        }
+        socket.to(room).emit('user_offline', {
+          userId: user.id
+        });
+      }
     });
   });
 

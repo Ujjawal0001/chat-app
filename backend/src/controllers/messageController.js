@@ -4,7 +4,7 @@ import {
   markMessagesAsRead,
   deleteMessage
 } from '../services/messageService.js';
-import { getIO } from '../services/socketService.js';
+import { getIO, isPartnerOnlineInSpace } from '../services/socketService.js';
 import { sendSuccess } from '../utils/response.js';
 
 export const handleGetMessages = async (req, res, next) => {
@@ -22,9 +22,18 @@ export const handleGetMessages = async (req, res, next) => {
   }
 };
 
+export const handleGetChatStatus = async (req, res, next) => {
+  try {
+    const isPartnerOnline = isPartnerOnlineInSpace(req.user.sharedSpaceId, req.user.id);
+    return sendSuccess(res, { isPartnerOnline }, 'Chat status');
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const handleSendMessage = async (req, res, next) => {
   try {
-    const { content, mediaUrl, mediaType } = req.body;
+    const { content, mediaUrl, mediaType, clientTempId } = req.body;
 
     if (!content && !mediaUrl) {
       return res.status(400).json({
@@ -41,17 +50,22 @@ export const handleSendMessage = async (req, res, next) => {
       mediaType
     });
 
+    const payload = {
+      ...message,
+      clientTempId: clientTempId || null
+    };
+
     // Broadcast in real-time via Socket.IO if available
     try {
       const io = getIO();
       if (io) {
-        io.to(`space:${req.user.sharedSpaceId}`).emit('new_message', message);
+        io.to(`space:${req.user.sharedSpaceId}`).emit('new_message', payload);
       }
     } catch (socketErr) {
       // Socket emission is best effort
     }
 
-    return sendSuccess(res, message, 'Message sent successfully', 201);
+    return sendSuccess(res, payload, 'Message sent successfully', 201);
   } catch (err) {
     next(err);
   }

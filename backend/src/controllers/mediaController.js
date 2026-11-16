@@ -7,6 +7,7 @@ import {
 } from '../services/mediaService.js';
 import {
   generateSignedUploadParameters,
+  uploadBuffer,
   uploadBufferToCloudinary
 } from '../services/uploadService.js';
 import { validateFileMetadata } from '../utils/fileValidation.js';
@@ -49,7 +50,7 @@ export const handleDirectUpload = async (req, res, next) => {
     }
 
     const folder = `${config.cloudinary.folder}/${req.sharedSpaceId}`;
-    const uploadResult = await uploadBufferToCloudinary(req.file.buffer, {
+    const uploadResult = await uploadBuffer(req.file.buffer, {
       folder,
       resourceType: validation.mediaType === 'video' ? 'video' : 'image',
       originalname: req.file.originalname
@@ -64,7 +65,11 @@ export const handleDirectUpload = async (req, res, next) => {
       ...uploadResult
     });
 
-    return sendSuccess(res, { media: item }, 'Media uploaded successfully', 201);
+    return sendSuccess(res, {
+      media: item,
+      mediaUrl: item.mediaUrl,
+      mediaType: item.mediaType
+    }, 'Media uploaded successfully', 201);
   } catch (err) {
     next(err);
   }

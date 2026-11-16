@@ -14,6 +14,7 @@ import invitationRoutes from './routes/invitationRoutes.js';
 import mediaRoutes from './routes/mediaRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 
 const app = express();
 
@@ -104,10 +105,11 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/invitations', invitationRoutes);
 
-// Media, Favorites, & Space Users Routes
+// Media, Favorites, Space Users, & Chat Messages Routes
 app.use('/api/media', mediaRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Serve Frontend static assets and SPA fallback in production if built
 if (frontendDistPath) {

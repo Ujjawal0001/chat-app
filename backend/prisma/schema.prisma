@@ -17,6 +17,7 @@ model SharedSpace {
 
   users User[]
   media Media[]
+  messages Message[]
 
   @@map("shared_spaces")
 }
@@ -31,6 +32,7 @@ model User {
 
   uploadedMedia Media[]    @relation("UserUploads")
   favorites     Favorite[]
+  sentMessages  Message[]  @relation("SentMessages")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -87,4 +89,24 @@ model Invitation {
   createdAt   DateTime  @default(now())
 
   @@map("invitations")
+}
+
+model Message {
+  id            String      @id @default(uuid())
+  content       String      @db.Text
+  mediaUrl      String?
+  mediaType     String?     // 'image' | 'video'
+  isRead        Boolean     @default(false)
+  senderId      String
+  sender        User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sharedSpaceId String
+  sharedSpace   SharedSpace @relation(fields: [sharedSpaceId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([sharedSpaceId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
 }

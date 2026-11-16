@@ -10,7 +10,8 @@ import {
   Moon,
   LogOut,
   UserPlus,
-  Sparkles
+  Sparkles,
+  MessageCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +26,7 @@ export const AppLayout = () => {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Chat', path: '/chat', icon: MessageCircle },
     { label: 'Gallery', path: '/gallery', icon: GalleryIcon },
     { label: 'Favorites', path: '/favorites', icon: Bookmark },
     { label: 'Settings', path: '/settings', icon: Settings },

@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import { config } from './config/env.js';
 import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { sendSuccess } from './utils/response.js';
+import authRoutes from './routes/authRoutes.js';
+import invitationRoutes from './routes/invitationRoutes.js';
 
 const app = express();
 
@@ -94,6 +96,10 @@ app.get('/api/health', (req, res) => {
     environment: config.nodeEnv
   }, 'TogetherSpace API is running');
 });
+
+// Authentication & Invitation Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/invitations', invitationRoutes);
 
 // Serve Frontend static assets and SPA fallback in production if built
 if (frontendDistPath) {

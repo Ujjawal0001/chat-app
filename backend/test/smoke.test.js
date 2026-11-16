@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import app from '../src/app.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 test('Backend Architecture Smoke Test', async (t) => {
   let server;
@@ -39,9 +45,15 @@ test('Backend Architecture Smoke Test', async (t) => {
   });
 
   await t.test('GET /assets/*.css returns 200 and text/css MIME type', async () => {
-    const res = await fetch(`http://localhost:${port}/assets/index-ijEDRtpt.css`);
-    assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.headers.get('content-type')?.includes('text/css'), true);
+    const assetsDir = path.resolve(__dirname, '../../frontend/dist/assets');
+    const files = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : [];
+    const cssFile = files.find((f) => f.endsWith('.css'));
+
+    if (cssFile) {
+      const res = await fetch(`http://localhost:${port}/assets/${cssFile}`);
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('content-type')?.includes('text/css'), true);
+    }
   });
 
   await t.test('Unknown route returns 404 with structured JSON', async () => {

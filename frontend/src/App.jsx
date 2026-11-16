@@ -1,43 +1,97 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Heart, Sparkles } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AppLayout from './layouts/AppLayout';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import GalleryPage from './pages/GalleryPage';
+import FavoritesPage from './pages/FavoritesPage';
+import SettingsPage from './pages/SettingsPage';
+import { Heart } from 'lucide-react';
+
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-space-light dark:bg-space-dark text-ink dark:text-white">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-lavender-500 to-coral-400 flex items-center justify-center text-white shadow-soft animate-pulse mb-4">
+          <Heart className="w-6 h-6 fill-current" />
+        </div>
+        <p className="font-serif text-lg text-ink-muted">Loading your shared space...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+
+// Guest Route Component (redirects to dashboard if already authenticated)
+const GuestRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen flex flex-col justify-between p-6 sm:p-12">
-        <header className="flex justify-between items-center max-w-6xl mx-auto w-full">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-lavender-400 to-coral-400 flex items-center justify-center text-white shadow-soft">
-              <Heart className="w-5 h-5 fill-current" />
-            </div>
-            <span className="font-serif text-2xl font-medium tracking-tight text-ink dark:text-white">
-              TogetherSpace
-            </span>
-          </div>
-          <span className="text-xs uppercase tracking-widest font-semibold px-3 py-1 rounded-full bg-lavender-100 text-lavender-700 dark:bg-lavender-900/40 dark:text-lavender-300">
-            Phase 1 Initialized
-          </span>
-        </header>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            {/* Public / Guest Routes */}
+            <Route
+              path="/login"
+              element={
+                <GuestRoute>
+                  <LoginPage />
+                </GuestRoute>
+              }
+            />
+            <Route
+              path="/accept-invite"
+              element={
+                <GuestRoute>
+                  <LoginPage />
+                </GuestRoute>
+              }
+            />
 
-        <main className="max-w-2xl mx-auto my-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white dark:bg-space-surfaceDark border border-space-borderLight dark:border-space-borderDark text-xs text-ink-muted">
-            <Sparkles className="w-4 h-4 text-lavender-500" />
-            <span>Private Two-Person Media Sharing Platform</span>
-          </div>
-          <h1 className="font-serif text-4xl sm:text-5xl font-medium tracking-tight text-ink dark:text-white">
-            An intimate archive for two stories intertwined.
-          </h1>
-          <p className="text-ink-muted text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
-            Architected for complete privacy, rich editorial photography presentation, and seamless shared memories.
-          </p>
-        </main>
+            {/* Authenticated Protected Routes */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="gallery" element={<GalleryPage />} />
+              <Route path="favorites" element={<FavoritesPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
 
-        <footer className="text-center text-xs text-ink-light py-4">
-          TogetherSpace &copy; {new Date().getFullYear()} &mdash; Strictly two authorized souls.
-        </footer>
-      </div>
-    </Router>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

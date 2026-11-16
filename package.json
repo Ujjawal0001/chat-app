@@ -4,9 +4,12 @@
   "private": true,
   "description": "TogetherSpace – Private Two-Person Media Sharing Platform Monorepo",
   "scripts": {
+    "build": "npm --prefix backend run build",
+    "start": "npm --prefix backend start",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
     "start:backend": "npm --prefix backend start",
     "prisma:generate": "npm --prefix backend run prisma:generate",
     "prisma:migrate": "npm --prefix backend run prisma:migrate"

@@ -9,14 +9,20 @@ import { sendSuccess } from './utils/response.js';
 
 const app = express();
 
+// Trust reverse proxy (Essential on Render to correctly read client IP, protocol, and host headers)
+app.set('trust proxy', 1);
+
 // Security HTTP headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // CORS Configuration
+const normalizeOrigin = (url) => url ? url.trim().replace(/\/+$/, '') : null;
+const configuredFrontend = normalizeOrigin(config.frontendUrl);
+
 const allowedOrigins = [
-  config.frontendUrl,
+  configuredFrontend,
   'http://localhost:5173',
   'http://127.0.0.1:5173'
 ].filter(Boolean);
@@ -24,7 +30,13 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) or listed origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) return callback(null, true);
+    
+    const incomingOrigin = normalizeOrigin(origin);
+    const isAllowed = allowedOrigins.includes(incomingOrigin) ||
+      (config.isProduction && incomingOrigin && (incomingOrigin.endsWith('.vercel.app') || incomingOrigin.endsWith('.onrender.com')));
+
+    if (isAllowed) {
       callback(null, true);
     } else {
       callback(new Error(`CORS blocked request from origin: ${origin}`));

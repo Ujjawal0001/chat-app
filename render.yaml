@@ -1,0 +1,60 @@
+services:
+  # =========================================================================
+  # TogetherSpace Backend REST API Web Service
+  # =========================================================================
+  - type: web
+    name: togetherspace-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INITIAL_SETUP_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: togetherspace
+      - key: MAX_IMAGE_FILE_SIZE
+        value: "20971520"
+      - key: MAX_VIDEO_FILE_SIZE
+        value: "104857600"
+
+  # =========================================================================
+  # TogetherSpace Frontend Static Site (Deployable on Render or Vercel)
+  # =========================================================================
+  - type: web
+    name: togetherspace-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false

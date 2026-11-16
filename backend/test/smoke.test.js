@@ -38,6 +38,12 @@ test('Backend Architecture Smoke Test', async (t) => {
     assert.match(text, /TogetherSpace/);
   });
 
+  await t.test('GET /assets/*.css returns 200 and text/css MIME type', async () => {
+    const res = await fetch(`http://localhost:${port}/assets/index-ijEDRtpt.css`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.headers.get('content-type')?.includes('text/css'), true);
+  });
+
   await t.test('Unknown route returns 404 with structured JSON', async () => {
     const res = await fetch(`http://localhost:${port}/api/nonexistent-endpoint`);
     assert.strictEqual(res.status, 404);

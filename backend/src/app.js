@@ -14,17 +14,26 @@ const app = express();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
+
+// Find frontend dist directory across different deployment root configurations
+const possibleDistPaths = [
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const frontendDistPath = possibleDistPaths.find((p) => fs.existsSync(p));
 
 // Trust reverse proxy (Essential on Render to correctly read client IP, protocol, and host headers)
 app.set('trust proxy', 1);
 
-// Security HTTP headers
+// Security HTTP headers (disable default restrictive CSP so Google Fonts and Vite SPA scripts load smoothly)
 app.use(helmet({
+  contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// CORS Configuration
+// CORS Configuration (Applied to /api endpoints)
 const normalizeOrigin = (url) => url ? url.trim().replace(/\/+$/, '') : null;
 const configuredFrontend = normalizeOrigin(config.frontendUrl);
 
@@ -34,25 +43,30 @@ const allowedOrigins = [
   'http://127.0.0.1:5173'
 ].filter(Boolean);
 
-app.use(cors({
+const apiCors = cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) or listed origins
+    // Allow requests with no origin (e.g. mobile apps, curl, same-origin fetch)
     if (!origin) return callback(null, true);
     
     const incomingOrigin = normalizeOrigin(origin);
     const isAllowed = allowedOrigins.includes(incomingOrigin) ||
-      (config.isProduction && incomingOrigin && (incomingOrigin.endsWith('.vercel.app') || incomingOrigin.endsWith('.onrender.com')));
+      (incomingOrigin && (
+        incomingOrigin.endsWith('.vercel.app') ||
+        incomingOrigin.endsWith('.onrender.com') ||
+        incomingOrigin.includes('localhost') ||
+        incomingOrigin.includes('127.0.0.1')
+      ));
 
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS blocked request from origin: ${origin}`));
-    }
+    // Pass boolean to callback without throwing a 500 error
+    callback(null, Boolean(isAllowed));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+});
+
+// Apply CORS to API routes
+app.use('/api', apiCors);
 
 // Global Rate Limiting
 const generalLimiter = rateLimit({
@@ -82,7 +96,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Serve Frontend static assets and SPA fallback in production if built
-if (fs.existsSync(frontendDistPath)) {
+if (frontendDistPath) {
   app.use(express.static(frontendDistPath));
 
   app.get('*', (req, res, next) => {

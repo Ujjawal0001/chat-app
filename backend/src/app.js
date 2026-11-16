@@ -3,11 +3,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { config } from './config/env.js';
 import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { sendSuccess } from './utils/response.js';
 
 const app = express();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
 
 // Trust reverse proxy (Essential on Render to correctly read client IP, protocol, and host headers)
 app.set('trust proxy', 1);
@@ -65,11 +72,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Trust first proxy for deployment behind Render / reverse proxies
-if (config.isProduction) {
-  app.set('trust proxy', 1);
-}
-
 // Health Check Endpoint (Essential for Render & production monitoring)
 app.get('/api/health', (req, res) => {
   return sendSuccess(res, {
@@ -79,7 +81,19 @@ app.get('/api/health', (req, res) => {
   }, 'TogetherSpace API is running');
 });
 
-// 404 Handler
+// Serve Frontend static assets and SPA fallback in production if built
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+
+  app.get('*', (req, res, next) => {
+    if (req.originalUrl.startsWith('/api')) {
+      return next();
+    }
+    return res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
+// 404 Handler for unmatched API routes
 app.use(notFoundHandler);
 
 // Central Global Error Handler

@@ -30,6 +30,14 @@ test('Backend Architecture Smoke Test', async (t) => {
     assert.ok(res.headers.get('x-content-type-options'), 'nosniff header should be present');
   });
 
+  await t.test('GET / serves frontend index.html SPA entrypoint', async () => {
+    const res = await fetch(`http://localhost:${port}/`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.headers.get('content-type')?.includes('text/html'), true);
+    const text = await res.text();
+    assert.match(text, /TogetherSpace/);
+  });
+
   await t.test('Unknown route returns 404 with structured JSON', async () => {
     const res = await fetch(`http://localhost:${port}/api/nonexistent-endpoint`);
     assert.strictEqual(res.status, 404);

@@ -1,15 +1,15 @@
 services:
   # =========================================================================
-  # TogetherSpace Backend REST API Web Service
+  # TogetherSpace Full-Stack Web Service (Backend API + Frontend SPA)
   # =========================================================================
   - type: web
-    name: togetherspace-api
+    name: togetherspace
     runtime: node
     plan: free
     region: oregon
     rootDir: backend
-    buildCommand: npm install && npx prisma generate
-    startCommand: node src/server.js
+    buildCommand: npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
@@ -39,22 +39,3 @@ services:
         value: "20971520"
       - key: MAX_VIDEO_FILE_SIZE
         value: "104857600"
-
-  # =========================================================================
-  # TogetherSpace Frontend Static Site (Deployable on Render or Vercel)
-  # =========================================================================
-  - type: web
-    name: togetherspace-frontend
-    runtime: static
-    plan: free
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    autoDeploy: true
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        sync: false

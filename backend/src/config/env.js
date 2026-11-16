@@ -2,7 +2,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Ensure DIRECT_URL defaults to DATABASE_URL if not explicitly set (e.g. on Render/Neon)
-if (process.env.DATABASE_URL && !process.env.DIRECT_URL) {
+// or if it was mistakenly set to localhost while DATABASE_URL points to a cloud database
+if (
+  process.env.DATABASE_URL &&
+  (!process.env.DIRECT_URL ||
+    ((process.env.DIRECT_URL.includes('localhost') || process.env.DIRECT_URL.includes('127.0.0.1')) &&
+      !process.env.DATABASE_URL.includes('localhost') &&
+      !process.env.DATABASE_URL.includes('127.0.0.1')))
+) {
   process.env.DIRECT_URL = process.env.DATABASE_URL;
 }
 

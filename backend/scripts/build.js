@@ -22,6 +22,17 @@ if (fs.existsSync(frontendDir)) {
   console.log('[Build] Frontend build complete!');
 }
 
+// Sanitize DIRECT_URL if it was set to localhost while DATABASE_URL is remote
+if (
+  process.env.DATABASE_URL &&
+  (!process.env.DIRECT_URL ||
+    ((process.env.DIRECT_URL.includes('localhost') || process.env.DIRECT_URL.includes('127.0.0.1')) &&
+      !process.env.DATABASE_URL.includes('localhost') &&
+      !process.env.DATABASE_URL.includes('127.0.0.1')))
+) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
+}
+
 // 3. Generate Prisma Client using local npm script
 console.log('[Build] Generating Prisma Client in:', backendDir);
 execSync('npm run prisma:generate', { cwd: backendDir, stdio: 'inherit' });

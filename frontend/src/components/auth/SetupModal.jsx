@@ -6,7 +6,7 @@ import { User, Mail, Lock, KeyRound, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const SetupModal = ({ isOpen, onClose, onSetupSuccess }) => {
-  const { setupOwner } = useAuth();
+  const { setupOwner, systemStatus } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,11 +28,13 @@ export const SetupModal = ({ isOpen, onClose, onSetupSuccess }) => {
         onSetupSuccess(data);
       }
     } catch (err) {
-      if (err.errors) {
-        setErrors(err.errors);
-      } else {
-        setErrors({ general: err.message || 'Setup failed. Please try again.' });
-      }
+      console.error('Setup owner error:', err);
+      const fieldErrors = (err.errors && typeof err.errors === 'object' && !Array.isArray(err.errors)) ? err.errors : {};
+      const generalMessage = err.message || (typeof err.errors === 'string' ? err.errors : 'Setup failed. Please check your inputs.');
+      setErrors({
+        ...fieldErrors,
+        general: generalMessage
+      });
     } finally {
       setLoading(false);
     }
@@ -47,7 +49,7 @@ export const SetupModal = ({ isOpen, onClose, onSetupSuccess }) => {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errors.general && (
-          <div className="p-3 text-xs rounded-xl bg-coral-50 text-coral-600 border border-coral-200">
+          <div className="p-3.5 text-xs font-medium rounded-xl bg-coral-50 dark:bg-coral-950/40 text-coral-600 dark:text-coral-300 border border-coral-200 dark:border-coral-800">
             {errors.general}
           </div>
         )}
@@ -85,14 +87,19 @@ export const SetupModal = ({ isOpen, onClose, onSetupSuccess }) => {
         />
 
         <Input
-          label="Initial Setup Secret (Optional)"
+          label={systemStatus?.requiresSetupSecret ? "Initial Setup Passphrase (Required)" : "Initial Setup Secret (Optional)"}
           type="password"
-          placeholder="If configured in server environment"
+          placeholder={systemStatus?.requiresSetupSecret ? "Enter your server's INITIAL_SETUP_SECRET" : "Leave blank if not configured"}
           icon={KeyRound}
           value={formData.setupSecret}
           onChange={(e) => setFormData({ ...formData, setupSecret: e.target.value })}
           error={errors.setupSecret}
-          helperText="Only required if your administrator set INITIAL_SETUP_SECRET."
+          required={Boolean(systemStatus?.requiresSetupSecret)}
+          helperText={
+            systemStatus?.requiresSetupSecret
+              ? "Your server has INITIAL_SETUP_SECRET configured in Render. Enter that exact passphrase to unlock setup."
+              : "Only required if INITIAL_SETUP_SECRET was configured in server environment."
+          }
         />
 
         <div className="pt-2">

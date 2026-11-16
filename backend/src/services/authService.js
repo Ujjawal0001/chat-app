@@ -273,7 +273,8 @@ export const getSystemAuthStatus = async () => {
       isSetupComplete,
       isRegistrationOpen: registrationOpen,
       hasActiveInvitation: activeInvitation,
-      invitationExpiresAt
+      invitationExpiresAt,
+      requiresSetupSecret: Boolean(config.initialSetupSecret && config.initialSetupSecret.trim() !== '')
     };
   } catch (err) {
     // Graceful fallback when database connection is initializing or unpopulated
@@ -284,6 +285,7 @@ export const getSystemAuthStatus = async () => {
       isRegistrationOpen: true,
       hasActiveInvitation: false,
       invitationExpiresAt: null,
+      requiresSetupSecret: Boolean(config.initialSetupSecret && config.initialSetupSecret.trim() !== ''),
       dbStatus: 'pending_configuration'
     };
   }

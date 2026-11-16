@@ -14,10 +14,13 @@ export const globalErrorHandler = (err, req, res, next) => {
     console.error(`[Error] ${req.method} ${req.originalUrl}:`, err);
   }
 
+  // Only expose validation field errors or non-production stack traces
+  const errorDetails = err.errors || (config.isProduction ? null : (typeof err.stack === 'string' ? undefined : err.stack));
+
   return sendError(
     res,
     message,
     statusCode,
-    config.isProduction ? null : err.stack
+    errorDetails
   );
 };

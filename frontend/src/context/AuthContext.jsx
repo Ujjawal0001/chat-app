@@ -11,7 +11,8 @@ export const AuthProvider = ({ children }) => {
     maxUsers: 2,
     isSetupComplete: false,
     isRegistrationOpen: true,
-    hasActiveInvitation: false
+    hasActiveInvitation: false,
+    requiresSetupSecret: false
   });
 
   // Check current session from HTTP-only cookie

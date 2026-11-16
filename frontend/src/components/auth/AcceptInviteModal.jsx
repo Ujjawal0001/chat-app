@@ -34,11 +34,13 @@ export const AcceptInviteModal = ({ isOpen, onClose, initialToken = '', onSucces
         onSuccess(data);
       }
     } catch (err) {
-      if (err.errors) {
-        setErrors(err.errors);
-      } else {
-        setErrors({ general: err.message || 'Invitation acceptance failed.' });
-      }
+      console.error('Accept invite error:', err);
+      const fieldErrors = (err.errors && typeof err.errors === 'object' && !Array.isArray(err.errors)) ? err.errors : {};
+      const generalMessage = err.message || (typeof err.errors === 'string' ? err.errors : 'Invitation acceptance failed.');
+      setErrors({
+        ...fieldErrors,
+        general: generalMessage
+      });
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export const AcceptInviteModal = ({ isOpen, onClose, initialToken = '', onSucces
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errors.general && (
-          <div className="p-3 text-xs rounded-xl bg-coral-50 text-coral-600 border border-coral-200">
+          <div className="p-3.5 text-xs font-medium rounded-xl bg-coral-50 dark:bg-coral-950/40 text-coral-600 dark:text-coral-300 border border-coral-200 dark:border-coral-800">
             {errors.general}
           </div>
         )}
